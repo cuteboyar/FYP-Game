@@ -1,188 +1,84 @@
 ﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace SunTemple
+public class SimpleDoorInteract : MonoBehaviour
 {
-   
+    public string playerTag = "Player";
+    public float openRadius = 2f;
+    public float openAngleY = 90f;
+    public float rotationSpeed = 4f;
+    public float closeAfterSeconds = 3f;
 
-    public class Door : MonoBehaviour
+    private Transform player;
+    private Quaternion closedRot;
+    private Quaternion openRot;
+    private bool isOpen = false;
+
+    void Start()
     {
-		public bool IsLocked = false;
-        public bool DoorClosed = true;
-        public float OpenRotationAmount = 90;
-        public float RotationSpeed = 1f;
-        public float MaxDistance = 3.0f;
-		public string playerTag = "Player";
-		private Collider DoorCollider;
+        // Door ki shuru wali aur khuli hui rotation save karein
+        closedRot = transform.localRotation;
+        openRot = closedRot * Quaternion.Euler(0f, openAngleY, 0f);
 
-		private GameObject Player;
-		private Camera Cam;
-		private CursorManager cursor;
-
-        Vector3 StartRotation;
-        float StartAngle = 0;
-        float EndAngle = 0;
-        float LerpTime = 1f;
-        float CurrentLerpTime = 0;
-        bool Rotating;
-
-
-		private bool scriptIsEnabled = true;
-
-
-
-        void Start(){
-            StartRotation = transform.localEulerAngles ;
-			DoorCollider = GetComponent<BoxCollider> ();
-
-			if (!DoorCollider) {
-				Debug.LogWarning (this.GetType ().Name + ".cs on " + gameObject.name + "door has no collider", gameObject);
-				scriptIsEnabled = false;
-				return;
-			}
-
-			Player = GameObject.FindGameObjectWithTag (playerTag);
-
-			if (!Player) {
-				Debug.LogWarning (this.GetType ().Name + ".cs on " + this.name + ", No object tagged with " + playerTag + " found in Scene", gameObject);
-				scriptIsEnabled = false;
-				return;
-			}
-
-			Cam = Camera.main;
-			if (!Cam) {
-				Debug.LogWarning (this.GetType ().Name + ", No objects tagged with MainCamera in Scene", gameObject);
-				scriptIsEnabled = false;
-			}
-		
-			cursor = CursorManager.instance;
-
-			if (cursor != null) {
-				cursor.SetCursorToDefault ();
-			}
-
-					
-        }
-
-
-
-		void Update()
-		{
-			if (scriptIsEnabled) {
-				if (Rotating) {
-					Rotate ();
-				}
-
-				if (Input.GetKeyDown (KeyCode.Mouse0)) {
-					TryToOpen ();
-				}
-
-
-				if (cursor != null) {
-					CursorHint ();
-				}
-			}
-
-		} 
-
-
-
-
-		void TryToOpen(){
-			if (Mathf.Abs(Vector3.Distance(transform.position, Player.transform.position)) <= MaxDistance){	
-
-				Ray ray = Cam.ScreenPointToRay (new Vector3 (Screen.width / 2, Screen.height / 2, 0));
-				RaycastHit hit;
-											
-				if (DoorCollider.Raycast(ray, out hit, MaxDistance)){					
-					if (IsLocked == false){
-						Activate ();
-					}
-				}
-			}
-		}
-
-
-
-		void CursorHint(){
-			if (Mathf.Abs(Vector3.Distance(transform.position, Player.transform.position)) <= MaxDistance){	
-				Ray ray = Cam.ScreenPointToRay (new Vector3 (Screen.width / 2, Screen.height / 2, 0));
-				RaycastHit hit;
-
-				if (DoorCollider.Raycast (ray, out hit, MaxDistance)) {
-					if (IsLocked == false) {
-						cursor.SetCursorToDoor ();
-					} else if (IsLocked == true) {
-						cursor.SetCursorToLocked ();
-					}					
-				} else {
-					cursor.SetCursorToDefault ();
-				}
-			}
-		}
-
-
-
-
-        public void Activate()
+        // Player tag ("Player") se player dhoondein
+        GameObject playerObj = GameObject.FindGameObjectWithTag(playerTag);
+        if (playerObj != null)
         {
-            if (DoorClosed)
-                Open();
-            else
-                Close();
+            player = playerObj.transform;
         }
+    }
 
+    void Update()
+    {
+        if (player == null || isOpen) return;
 
+        // Player aur door ke darmiyan faasla check karein
+        float distance = Vector3.Distance(player.position, transform.position);
 
-       
-
-
-
-        void Rotate()
+        if (distance <= openRadius)
         {
-            CurrentLerpTime += Time.deltaTime * RotationSpeed;
-            if (CurrentLerpTime > LerpTime)
-            {
-                CurrentLerpTime = LerpTime;
-            }
-
-            float _Perc = CurrentLerpTime / LerpTime;
-
-            float _Angle = CircularLerp.Clerp(StartAngle, EndAngle, _Perc);
-            transform.localEulerAngles = new Vector3(transform.eulerAngles.x, _Angle, transform.eulerAngles.z);
-
-			if (CurrentLerpTime == LerpTime) {
-				Rotating = false;
-				DoorCollider.enabled = true;
-			}
-              
-           
+            StartCoroutine(OpenAndCloseDoor());
         }
+    }
 
+    IEnumerator OpenAndCloseDoor()
+    {
+        isOpen = true;
 
-
-        void Open()
+        // 1. Door ko smoothly open karein
+        while (Quaternion.Angle(transform.localRotation, openRot) > 0.5f)
         {
-			DoorCollider.enabled = false;
-            DoorClosed = false;
-            StartAngle = transform.localEulerAngles.y;
-            EndAngle =  StartRotation.y + OpenRotationAmount;
-            CurrentLerpTime = 0;
-            Rotating = true;
+            transform.localRotation = Quaternion.Slerp(
+                transform.localRotation,
+                openRot,
+                Time.deltaTime * rotationSpeed
+            );
+            yield return null;
         }
+        transform.localRotation = openRot;
 
+        // 2. 3 seconds rukien
+        yield return new WaitForSeconds(closeAfterSeconds);
 
-
-        void Close()
+        // 3. Door ko smoothly close karein
+        while (Quaternion.Angle(transform.localRotation, closedRot) > 0.5f)
         {
-			DoorCollider.enabled = false;
-            DoorClosed = true;
-            StartAngle = transform.localEulerAngles.y;
-            EndAngle = transform.localEulerAngles.y - OpenRotationAmount;
-            CurrentLerpTime = 0;
-            Rotating = true;
+            transform.localRotation = Quaternion.Slerp(
+                transform.localRotation,
+                closedRot,
+                Time.deltaTime * rotationSpeed
+            );
+            yield return null;
         }
+        transform.localRotation = closedRot;
 
+        isOpen = false;
+    }
+
+    // Scene view mein 2f ka radius circle/sphere dikhane ke liye
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, openRadius);
     }
 }
